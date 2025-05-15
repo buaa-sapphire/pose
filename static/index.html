@@ -55,8 +55,8 @@
 
     <script>
         /**
-         * Generic function to handle media upload.
-         * @param {string} type - 'target' or 'user'
+         * 通用上传函数（优化错误处理和状态显示）
+         * @param {string} type - 'target'或'user'
          */
         async function uploadMedia(type) {
             const fileInput = document.getElementById(`${type}File`);
@@ -65,47 +65,61 @@
             const mediaDisplay = document.getElementById(`${type}MediaDisplay`);
 
             if (!fileInput.files.length) {
-                statusDiv.textContent = "Please select a file first.";
+                statusDiv.textContent = "请先选择文件";
                 return;
             }
 
             const file = fileInput.files[0];
             const formData = new FormData();
-            // Dynamically set the field name based on the type
-            const fieldName = type === 'target' ? 'video_file' : 'media_file'; // 根据 type 设置字段名
-            formData.append(fieldName, file);
+            // 统一字段名为媒体类型（根据后端实际需求调整，假设后端需要区分target/user）
+            formData.append(`${type}_file`, file);  <!-- 修改字段名为type_file -->
 
-
-            // Show progress bar
             progressBar.style.display = 'block';
-            statusDiv.textContent = "Uploading...";
+            statusDiv.textContent = "上传中...";
 
             try {
-                const endpoint = type === 'target' ? '/api/upload_target' : '/api/upload_user';
+                const endpoint = `/api/upload_${type}`;  <!-- 统一端点格式 -->
                 const response = await fetch(endpoint, {
                     method: 'POST',
                     body: formData,
                 });
 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! Status: ${response.status}`);
-                }
+                if (!response.ok) throw new Error(`上传失败：状态码 ${response.status}`);
 
                 const result = await response.json();
-                progressBar.value = 100; // Complete progress
-                statusDiv.textContent = `Upload complete! ${result.pose_data_summary}`;
-                alert("Upload successful!");
+                progressBar.value = 100;
+                // 容错处理：如果pose_data_summary不存在则显示通用信息
+                statusDiv.textContent = `上传完成！${result.pose_data_summary || '媒体已保存'}`;  <!-- 关键修改 -->
+                alert("上传成功！");
 
-                // Display uploaded media
+                // 显示媒体并绑定canvas尺寸（新增逻辑）
+                let mediaElement;
                 if (result.media_type === 'video') {
-                    mediaDisplay.innerHTML = `<video controls src="${result.media_url}" width="320"></video>`;
+                    mediaDisplay.innerHTML = `<video controls src="${result.media_url}" width="320" id="${type}Media"></video>`;
+                    mediaElement = document.getElementById(`${type}Media`);
+                    // 视频元数据加载后设置canvas尺寸
+                    mediaElement.onloadedmetadata = () => setCanvasSize(type, mediaElement.videoWidth, mediaElement.videoHeight);
                 } else if (result.media_type === 'image') {
-                    mediaDisplay.innerHTML = `<img src="${result.media_url}" width="320">`;
+                    mediaDisplay.innerHTML = `<img src="${result.media_url}" width="320" id="${type}Media">`;
+                    mediaElement = document.getElementById(`${type}Media`);
+                    // 图片加载后设置canvas尺寸
+                    mediaElement.onload = () => setCanvasSize(type, mediaElement.width, mediaElement.height);
                 }
+
+                progressBar.style.display = 'none';  <!-- 上传完成后隐藏进度条 -->
             } catch (error) {
                 progressBar.style.display = 'none';
-                statusDiv.textContent = `Error: ${error.message}`;
+                statusDiv.textContent = `错误：${error.message}`;
             }
+        }
+
+        // 新增：设置对应canvas的尺寸
+        function setCanvasSize(type, width, height) {
+            const canvas = document.getElementById(`${type}Canvas`);
+            canvas.width = width;
+            canvas.height = height;
+            canvas.style.width = `${width}px`;
+            canvas.style.height = `${height}px`;
         }
 
         // Function to compare poses
@@ -138,6 +152,19 @@
         }
 
         // Helper function to draw pose on canvas
+            // 增加数据验证（避免无效坐标）
+            poseData.forEach((point, index) => {
+                if (point.x >= 0 && point.x <= canvas.width &&
+                    point.y >= 0 && point.y <= canvas.height) {
+                    ctx.beginPath();
+                    ctx.arc(point.x, point.y, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                    // 可选：显示关键点编号
+                    ctx.fillStyle = '#000';
+                    ctx.fillText(index, point.x + 8, point.y);
+                    ctx.fillStyle = '#ff0000';
+                }
+            ctx.fillStyle = '#ff0000';  <!-- 添加关键点颜色 -->
         function drawPoseOnCanvas(canvasId, poseData) {
             const canvas = document.getElementById(canvasId);
             const ctx = canvas.getContext('2d');
