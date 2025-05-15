@@ -12,7 +12,7 @@ import tempfile
 # 为了方便演示，这里先不实例化，在API调用时实例化或全局实例化
 # 确保你的4090显卡被正确识别为 cuda:0
 
-MODEL_ALIAS = 'vitpose-base-coco-256x192'  # 或者 'hrnet_w48_coco_256x192'
+MODEL_ALIAS = 'td-hm_ViTPose-base_8xb64-210e_coco-256x192-216eae50_20230314'  # 或者 'hrnet_w48_coco_256x192'
 INFERENCER = None
 
 
