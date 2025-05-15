@@ -4,15 +4,25 @@ from mmpose.apis import MMPoseInferencer
 import os
 import tempfile
 
+import mmpose
+import mmdet
+import mmcv
+print(f"MMPose: {mmpose.__version__}")
+print(f"MMDetection: {mmdet.__version__}")
+print(f"MMCV: {mmcv.__version__}")
+
+
 # 初始化 MMPose Inferencer (选择一个模型)
 # 模型列表: https://mmpose.readthedocs.io/en/latest/model_zoo_papers/algorithms.html
 # 例如，使用 HRNet: 'hrnet_w48_coco_256x192'
 # 或 ViTPose: 'vitpose-base-coco-256x192'
 # inferencer = MMPoseInferencer(pose2d='hrnet_w48_coco_256x192', device='cuda:0')
 # 为了方便演示，这里先不实例化，在API调用时实例化或全局实例化
-# 确保你的4090显卡被正确识别为 cuda:0
+# 确保你的4090显卡被正确识别为 cuda:0zzzenm
 
-MODEL_ALIAS = 'td-hm_ViTPose-base_8xb64-210e_coco-256x192-216eae50_20230314'  # 或者 'hrnet_w48_coco_256x192'
+# MODEL_ALIAS = 'td-hm_ViTPose-base_8xb64-210e_coco-256x192'  # 或者 'hrnet_w48_coco_256x192'
+MODEL_ALIAS = 'td-hm_hrnet-w48_udp-8xb32-210e_coco-256x192'  # 或者 'hrnet_w48_coco_256x192'
+
 INFERENCER = None
 
 
@@ -44,6 +54,32 @@ def extract_poses_from_video(video_path: str, output_dir: str = "results"):
     result_generator = inferencer(video_path, return_vis=False,
                                   out_dir=output_dir)  # out_dir 用于保存可视化结果（如果return_vis=True）
     results = [result for result in result_generator]
+
+    # ---- DEBUGGING: PRINT THE STRUCTURE ----
+    if results:
+        print("Structure of the first frame's result (or first element of results):")
+        try:
+            import json
+            # 尝试只打印 results[0] 的一部分，或者只打印键，避免直接序列化复杂对象
+            if isinstance(results[0], dict):
+                print(f"Keys in results[0]: {list(results[0].keys())}")
+                if 'predictions' in results[0]:
+                    print(f"Type of results[0]['predictions']: {type(results[0]['predictions'])}")
+                    if results[0]['predictions'] and isinstance(results[0]['predictions'][0], list) and \
+                            results[0]['predictions'][0]:
+                        print(
+                            f"Keys in first prediction instance: {list(results[0]['predictions'][0][0].keys()) if isinstance(results[0]['predictions'][0][0], dict) else 'Not a dict'}")
+                # print(json.dumps(results[0], indent=2)) # 暂时注释掉这个，以防它出错
+            else:
+                print(f"results[0] is not a dict, it's a {type(results[0])}")
+
+        except TypeError as e_json:
+            print(f"ERROR: Failed to json.dumps results[0]. Error: {e_json}")
+            print("Printing results[0] directly (might be large or complex):")
+            print(results[0])  # 直接打印，看原始结构
+        except Exception as e_print:
+            print(f"ERROR during debug printing: {e_print}")
+    # ---- END DEBUGGING ----
 
     # 提取关键点
     # results[0]['predictions'][0][0]['keypoints'] # 这是一个例子，结构取决于模型

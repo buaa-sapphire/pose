@@ -3,6 +3,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 import os
 import json
+import traceback # 添加导入
 import shutil  # For removing temp files
 
 from .pose_estimator import extract_poses_from_video, extract_pose_from_image, get_inferencer
@@ -38,23 +39,25 @@ async def startup_event():
 @app.post("/api/upload_target")
 async def upload_target_video(video_file: UploadFile = File(...)):
     global TARGET_VIDEO_DATA
-    try:
+    try:  # <--- 添加 try
         file_path, filename = save_uploaded_file(video_file)
-        pose_results = extract_poses_from_video(file_path)  # This can be slow
+        # 下面这行是关键调用
+        pose_results = extract_poses_from_video(file_path)
 
-        # Save pose data to a json file for persistence (optional for this demo)
         pose_json_path = os.path.join(RESULTS_DIR, f"target_{os.path.splitext(filename)[0]}.json")
         with open(pose_json_path, 'w') as f:
-            json.dump(pose_results, f)
+            json.dump(pose_results, f)  # 这里也可能因为 pose_results 不可序列化而出错
 
         TARGET_VIDEO_DATA = {"path": filename, "pose_data": pose_results, "type": "video"}
         return JSONResponse(content={
             "message": "Target video uploaded and processed.",
             "filename": filename,
             "pose_data_summary": f"{len(pose_results['pose_data'])} frames processed.",
-            "video_url": f"/uploads/{filename}"  # URL to access the video
+            "video_url": f"/uploads/{filename}"
         })
-    except Exception as e:
+    except Exception as e:  # <--- 添加 except
+        print("!!! ERROR IN /api/upload_target !!!")
+        traceback.print_exc()  # 打印完整的堆栈跟踪到后端控制台
         raise HTTPException(status_code=500, detail=f"Error processing target video: {str(e)}")
 
 
