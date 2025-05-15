@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sport Video Analyzer</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <h1>Sport Video/Image Analyzer</h1>
+
+    <!-- Upload Target Media -->
+    <div class="upload-section">
+        <h2>1. Upload Target Athlete Media (Video or Image)</h2>
+        <input type="file" id="targetFile" accept="video/*,image/*">
+        <button onclick="uploadMedia('target')">Upload Target</button>
+        <div id="targetUploadStatus"></div>
+        <progress id="targetProgressBar" value="0" max="100" style="display:none;"></progress>
+        <div id="targetMediaDisplay"></div>
+    </div>
+
+    <!-- Upload User Media -->
+    <div class="upload-section">
+        <h2>2. Upload Your Media (Video or Image)</h2>
+        <input type="file" id="userFile" accept="video/*,image/*">
+        <button onclick="uploadMedia('user')">Upload Your Media</button>
+        <div id="userUploadStatus"></div>
+        <progress id="userProgressBar" value="0" max="100" style="display:none;"></progress>
+        <div id="userMediaDisplay"></div>
+    </div>
+
+    <!-- Analyze and Compare -->
+    <div class="analysis-section">
+        <h2>3. Analyze and Compare</h2>
+        <label for="frameIdToCompare">Frame ID to Compare (for videos):</label>
+        <input type="number" id="frameIdToCompare" value="0" min="0">
+        <button onclick="getComparison()">Compare Poses</button>
+        <div id="comparisonResult">
+            <h3>Feedback:</h3>
+            <pre id="feedbackText"></pre>
+        </div>
+    </div>
+
+    <h2>Visual Comparison</h2>
+    <div class="canvas-container">
+        <div>
+            <h3>Target Pose (Frame <span id="targetFrameDisp">0</span>)</h3>
+            <canvas id="targetCanvas"></canvas>
+        </div>
+        <div>
+            <h3>User Pose (Frame <span id="userFrameDisp">0</span>)</h3>
+            <canvas id="userCanvas"></canvas>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * Generic function to handle media upload.
+         * @param {string} type - 'target' or 'user'
+         */
+        async function uploadMedia(type) {
+            const fileInput = document.getElementById(`${type}File`);
+            const statusDiv = document.getElementById(`${type}UploadStatus`);
+            const progressBar = document.getElementById(`${type}ProgressBar`);
+            const mediaDisplay = document.getElementById(`${type}MediaDisplay`);
+
+            if (!fileInput.files.length) {
+                statusDiv.textContent = "Please select a file first.";
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const formData = new FormData();
+            // Dynamically set the field name based on the type
+            const fieldName = type === 'target' ? 'video_file' : 'media_file'; // 根据 type 设置字段名
+            formData.append(fieldName, file);
+
+
+            // Show progress bar
+            progressBar.style.display = 'block';
+            statusDiv.textContent = "Uploading...";
+
+            try {
+                const endpoint = type === 'target' ? '/api/upload_target' : '/api/upload_user';
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                progressBar.value = 100; // Complete progress
+                statusDiv.textContent = `Upload complete! ${result.pose_data_summary}`;
+                alert("Upload successful!");
+
+                // Display uploaded media
+                if (result.media_type === 'video') {
+                    mediaDisplay.innerHTML = `<video controls src="${result.media_url}" width="320"></video>`;
+                } else if (result.media_type === 'image') {
+                    mediaDisplay.innerHTML = `<img src="${result.media_url}" width="320">`;
+                }
+            } catch (error) {
+                progressBar.style.display = 'none';
+                statusDiv.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        // Function to compare poses
+        async function getComparison() {
+            const frameId = document.getElementById('frameIdToCompare').value;
+            const feedbackText = document.getElementById('feedbackText');
+            const targetFrameDisp = document.getElementById('targetFrameDisp');
+            const userFrameDisp = document.getElementById('userFrameDisp');
+
+            try {
+                const response = await fetch(`/api/compare_poses?frame_id=${frameId}`, {
+                    method: 'GET',
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                feedbackText.textContent = JSON.stringify(result.feedback, null, 2);
+                targetFrameDisp.textContent = frameId;
+                userFrameDisp.textContent = frameId;
+
+                // Draw poses on canvases
+                drawPoseOnCanvas('targetCanvas', result.target_pose);
+                drawPoseOnCanvas('userCanvas', result.user_pose);
+            } catch (error) {
+                feedbackText.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        // Helper function to draw pose on canvas
+        function drawPoseOnCanvas(canvasId, poseData) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Example drawing logic (customize as needed)
+            poseData.forEach(point => {
+                ctx.beginPath();
+                ctx.arc(point.x, point.y, 5, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+    </script>
+</body>
+</html>

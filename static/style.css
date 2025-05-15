@@ -1,0 +1,8 @@
+body { font-family: sans-serif; margin: 20px; }
+.upload-section, .analysis-section { margin-bottom: 20px; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+input[type="file"], button { margin-top: 5px; margin-bottom: 10px; }
+#targetUploadStatus, #userUploadStatus, #comparisonResult { margin-top: 10px; font-style: italic; }
+video, img { max-width: 320px; max-height: 240px; border: 1px solid #ddd; }
+.canvas-container { display: flex; gap: 20px; margin-top: 20px; }
+canvas { border: 1px solid black; /* Dimensions will be set by JS */ }
+pre { background-color: #f4f4f4; padding: 10px; border-radius: 3px; white-space: pre-wrap; }
