@@ -4,32 +4,27 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sport Video Analyzer</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <h1>Sport Video/Image Analyzer</h1>
 
-    <!-- Upload Target Media -->
     <div class="upload-section">
         <h2>1. Upload Target Athlete Media (Video or Image)</h2>
         <input type="file" id="targetFile" accept="video/*,image/*">
-        <button onclick="uploadMedia('target')">Upload Target</button>
+        <button onclick="uploadTarget()">Upload Target</button>
         <div id="targetUploadStatus"></div>
-        <progress id="targetProgressBar" value="0" max="100" style="display:none;"></progress>
         <div id="targetMediaDisplay"></div>
     </div>
 
-    <!-- Upload User Media -->
     <div class="upload-section">
         <h2>2. Upload Your Media (Video or Image)</h2>
         <input type="file" id="userFile" accept="video/*,image/*">
-        <button onclick="uploadMedia('user')">Upload Your Media</button>
+        <button onclick="uploadUser()">Upload Your Media</button>
         <div id="userUploadStatus"></div>
-        <progress id="userProgressBar" value="0" max="100" style="display:none;"></progress>
         <div id="userMediaDisplay"></div>
     </div>
 
-    <!-- Analyze and Compare -->
     <div class="analysis-section">
         <h2>3. Analyze and Compare</h2>
         <label for="frameIdToCompare">Frame ID to Compare (for videos):</label>
@@ -53,125 +48,6 @@
         </div>
     </div>
 
-    <script>
-        /**
-         * 通用上传函数（优化错误处理和状态显示）
-         * @param {string} type - 'target'或'user'
-         */
-        async function uploadMedia(type) {
-            const fileInput = document.getElementById(`${type}File`);
-            const statusDiv = document.getElementById(`${type}UploadStatus`);
-            const progressBar = document.getElementById(`${type}ProgressBar`);
-            const mediaDisplay = document.getElementById(`${type}MediaDisplay`);
-
-            if (!fileInput.files.length) {
-                statusDiv.textContent = "请先选择文件";
-                return;
-            }
-
-            const file = fileInput.files[0];
-            const formData = new FormData();
-            // 统一字段名为媒体类型（根据后端实际需求调整，假设后端需要区分target/user）
-            formData.append(`${type}_file`, file);  <!-- 修改字段名为type_file -->
-
-            progressBar.style.display = 'block';
-            statusDiv.textContent = "上传中...";
-
-            try {
-                const endpoint = `/api/upload_${type}`;  <!-- 统一端点格式 -->
-                const response = await fetch(endpoint, {
-                    method: 'POST',
-                    body: formData,
-                });
-
-                if (!response.ok) throw new Error(`上传失败：状态码 ${response.status}`);
-
-                const result = await response.json();
-                progressBar.value = 100;
-                // 容错处理：如果pose_data_summary不存在则显示通用信息
-                statusDiv.textContent = `上传完成！${result.pose_data_summary || '媒体已保存'}`;  <!-- 关键修改 -->
-                alert("上传成功！");
-
-                // 显示媒体并绑定canvas尺寸（新增逻辑）
-                let mediaElement;
-                if (result.media_type === 'video') {
-                    mediaDisplay.innerHTML = `<video controls src="${result.media_url}" width="320" id="${type}Media"></video>`;
-                    mediaElement = document.getElementById(`${type}Media`);
-                    // 视频元数据加载后设置canvas尺寸
-                    mediaElement.onloadedmetadata = () => setCanvasSize(type, mediaElement.videoWidth, mediaElement.videoHeight);
-                } else if (result.media_type === 'image') {
-                    mediaDisplay.innerHTML = `<img src="${result.media_url}" width="320" id="${type}Media">`;
-                    mediaElement = document.getElementById(`${type}Media`);
-                    // 图片加载后设置canvas尺寸
-                    mediaElement.onload = () => setCanvasSize(type, mediaElement.width, mediaElement.height);
-                }
-
-                progressBar.style.display = 'none';  <!-- 上传完成后隐藏进度条 -->
-            } catch (error) {
-                progressBar.style.display = 'none';
-                statusDiv.textContent = `错误：${error.message}`;
-            }
-        }
-
-        // 新增：设置对应canvas的尺寸
-        function setCanvasSize(type, width, height) {
-            const canvas = document.getElementById(`${type}Canvas`);
-            canvas.width = width;
-            canvas.height = height;
-            canvas.style.width = `${width}px`;
-            canvas.style.height = `${height}px`;
-        }
-
-        // Function to compare poses
-        async function getComparison() {
-            const frameId = document.getElementById('frameIdToCompare').value;
-            const feedbackText = document.getElementById('feedbackText');
-            const targetFrameDisp = document.getElementById('targetFrameDisp');
-            const userFrameDisp = document.getElementById('userFrameDisp');
-
-            try {
-                const response = await fetch(`/api/compare_poses?frame_id=${frameId}`, {
-                    method: 'GET',
-                });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP error! Status: ${response.status}`);
-                }
-
-                const result = await response.json();
-                feedbackText.textContent = JSON.stringify(result.feedback, null, 2);
-                targetFrameDisp.textContent = frameId;
-                userFrameDisp.textContent = frameId;
-
-                // Draw poses on canvases
-                drawPoseOnCanvas('targetCanvas', result.target_pose);
-                drawPoseOnCanvas('userCanvas', result.user_pose);
-            } catch (error) {
-                feedbackText.textContent = `Error: ${error.message}`;
-            }
-                                                        }
-
-        // Helper function to draw pose on canvas
-        function drawPoseOnCanvas(canvasId, poseData) {
-            const canvas = document.getElementById(canvasId);
-            const ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#ff0000';  // 添加关键点颜色
-
-            // 增加数据验证（避免无效坐标）
-            poseData.forEach((point, index) => {
-                if (point.x >= 0 && point.x <= canvas.width &&
-                    point.y >= 0 && point.y <= canvas.height) {
-                    ctx.beginPath();
-                    ctx.arc(point.x, point.y, 5, 0, Math.PI * 2);
-                    ctx.fill();
-                    // 可选：显示关键点编号
-                    ctx.fillStyle = '#000';
-                    ctx.fillText(index, point.x + 8, point.y);
-                    ctx.fillStyle = '#ff0000';  // 恢复关键点颜色
-                }
-            });  // 补充缺失的闭合括号
-        }
-    </script>
+    <script src="script.js"></script>
 </body>
 </html>
