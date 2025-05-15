@@ -149,9 +149,15 @@
             } catch (error) {
                 feedbackText.textContent = `Error: ${error.message}`;
             }
-        }
+                                                        }
 
         // Helper function to draw pose on canvas
+        function drawPoseOnCanvas(canvasId, poseData) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#ff0000';  // 添加关键点颜色
+
             // 增加数据验证（避免无效坐标）
             poseData.forEach((point, index) => {
                 if (point.x >= 0 && point.x <= canvas.width &&
@@ -162,20 +168,9 @@
                     // 可选：显示关键点编号
                     ctx.fillStyle = '#000';
                     ctx.fillText(index, point.x + 8, point.y);
-                    ctx.fillStyle = '#ff0000';
+                    ctx.fillStyle = '#ff0000';  // 恢复关键点颜色
                 }
-            ctx.fillStyle = '#ff0000';  <!-- 添加关键点颜色 -->
-        function drawPoseOnCanvas(canvasId, poseData) {
-            const canvas = document.getElementById(canvasId);
-            const ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // Example drawing logic (customize as needed)
-            poseData.forEach(point => {
-                ctx.beginPath();
-                ctx.arc(point.x, point.y, 5, 0, Math.PI * 2);
-                ctx.fill();
-            });
+            });  // 补充缺失的闭合括号
         }
     </script>
 </body>
