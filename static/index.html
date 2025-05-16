@@ -36,16 +36,46 @@
         </div>
     </div>
 
-    <!-- ****** 新增视频对比功能 ****** -->
-    <div class="analysis-section"> <!-- 可以复用 analysis-section 样式，或者新建 -->
+<!--    &lt;!&ndash; ****** 新增视频对比功能 ****** &ndash;&gt;-->
+<!--    <div class="analysis-section"> &lt;!&ndash; 可以复用 analysis-section 样式，或者新建 &ndash;&gt;-->
+<!--        <h2>4. Full Video Comparison (Experimental)</h2>-->
+<!--        <button onclick="getVideosComparison()">Compare Full Videos</button>-->
+<!--        <div id="videoComparisonResult"> &lt;!&ndash; 和JS中的ID对应 &ndash;&gt;-->
+<!--            <h3>Full Video Comparison Feedback:</h3>-->
+<!--            <pre id="videoComparisonFeedback"></pre> &lt;!&ndash; 和JS中的ID对应 &ndash;&gt;-->
+<!--        </div>-->
+<!--    </div>-->
+<!--    &lt;!&ndash; ****** 结束新增视频对比功能 ****** &ndash;&gt;-->
+
+    <!-- ... (之前的HTML) ... -->
+    <div class="analysis-section">
         <h2>4. Full Video Comparison (Experimental)</h2>
         <button onclick="getVideosComparison()">Compare Full Videos</button>
-        <div id="videoComparisonResult"> <!-- 和JS中的ID对应 -->
+        <div id="videoComparisonResult">
             <h3>Full Video Comparison Feedback:</h3>
-            <pre id="videoComparisonFeedback"></pre> <!-- 和JS中的ID对应 -->
+            <div id="videoOverallSimilarity"></div> <!-- 显示总体相似度 -->
+            <h4>Most Different Aligned Frames:</h4>
+            <div id="videoMostDifferentFramesFeedback"></div> <!-- 显示差异最大的帧的反馈 -->
+            <!-- 我们可以考虑在这里加一个简单的帧导航器和 Canvas 来显示对齐的帧 -->
+            <div class="aligned-frames-viewer" style="display: none;"> <!-- 初始隐藏 -->
+                <h4>Aligned Frame Viewer: <span id="alignedFrameIndicator">Pair 0/0</span></h4>
+                <button onclick="prevAlignedFrame()">Previous</button>
+                <button onclick="nextAlignedFrame()">Next</button>
+                <div class="canvas-container">
+                     <div>
+                        <h5>Target (Frame <span id="dtwTargetFrameId">?</span>)</h5>
+                        <canvas id="dtwTargetCanvas"></canvas>
+                     </div>
+                     <div>
+                        <h5>User (Frame <span id="dtwUserFrameId">?</span>)</h5>
+                        <canvas id="dtwUserCanvas"></canvas>
+                     </div>
+                </div>
+                <div id="currentAlignedPairFeedback"></div>
+            </div>
         </div>
     </div>
-    <!-- ****** 结束新增视频对比功能 ****** -->
+<!-- ... (其余HTML) ... -->
 
     <h2>Visual Comparison</h2>
     <div class="canvas-container">

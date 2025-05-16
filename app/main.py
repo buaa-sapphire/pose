@@ -37,32 +37,55 @@ async def startup_event():
         # For now, we'll let it try again on the first API call if it fails here.
 
 
-@app.post("/api/compare_videos")  # 改为 POST，因为可能需要发送整个视频的pose数据（或者后端从全局变量取）
+# @app.post("/api/compare_videos")  # 改为 POST，因为可能需要发送整个视频的pose数据（或者后端从全局变量取）
+# async def compare_videos_endpoint():
+#     if not TARGET_VIDEO_DATA or not USER_VIDEO_DATA:
+#         raise HTTPException(status_code=400, detail="Target or user video not uploaded/processed yet.")
+#
+#     # 确保是视频类型 (如果需要严格区分)
+#     if TARGET_VIDEO_DATA.get("type") != "video" or USER_VIDEO_DATA.get("type") != "video":
+#         raise HTTPException(status_code=400, detail="Video comparison requires both inputs to be videos.")
+#
+#     target_poses = TARGET_VIDEO_DATA.get("pose_data", {}).get("pose_data", [])
+#     user_poses = USER_VIDEO_DATA.get("pose_data", {}).get("pose_data", [])
+#
+#     if not target_poses or not user_poses:
+#         raise HTTPException(status_code=400, detail="Pose data missing for one or both videos.")
+#
+#     comparison_result = compare_pose_sequences_dtw(target_poses, user_poses)
+#
+#     if "error" in comparison_result:
+#         # 可以选择返回 200 OK 但包含错误信息，或返回 500/400
+#         return JSONResponse(status_code=400, content=comparison_result)
+#
+#     return JSONResponse(content={
+#         "message": "Video comparison complete.",
+#         "dtw_results": comparison_result
+#     })
+
+# app/main.py
+from .analysis import compare_pose_sequences_dtw_detailed  # 导入新函数
+
+
+@app.post("/api/compare_videos")
 async def compare_videos_endpoint():
     if not TARGET_VIDEO_DATA or not USER_VIDEO_DATA:
         raise HTTPException(status_code=400, detail="Target or user video not uploaded/processed yet.")
 
-    # 确保是视频类型 (如果需要严格区分)
     if TARGET_VIDEO_DATA.get("type") != "video" or USER_VIDEO_DATA.get("type") != "video":
         raise HTTPException(status_code=400, detail="Video comparison requires both inputs to be videos.")
 
-    target_poses = TARGET_VIDEO_DATA.get("pose_data", {}).get("pose_data", [])
-    user_poses = USER_VIDEO_DATA.get("pose_data", {}).get("pose_data", [])
-
-    if not target_poses or not user_poses:
-        raise HTTPException(status_code=400, detail="Pose data missing for one or both videos.")
-
-    comparison_result = compare_pose_sequences_dtw(target_poses, user_poses)
+    # 现在传递完整的 TARGET_VIDEO_DATA 和 USER_VIDEO_DATA 对象
+    # 因为 compare_pose_sequences_dtw_detailed 内部的 simple_compare_poses 需要它们
+    comparison_result = compare_pose_sequences_dtw_detailed(TARGET_VIDEO_DATA, USER_VIDEO_DATA)
 
     if "error" in comparison_result:
-        # 可以选择返回 200 OK 但包含错误信息，或返回 500/400
         return JSONResponse(status_code=400, content=comparison_result)
 
     return JSONResponse(content={
-        "message": "Video comparison complete.",
-        "dtw_results": comparison_result
+        "message": "Video detailed comparison complete.",
+        "dtw_results": comparison_result  # 现在包含更详细的信息
     })
-
 
 @app.post("/api/upload_target")
 async def upload_target_video(video_file: UploadFile = File(...)): # 或者叫 media_file 更通用
@@ -74,7 +97,13 @@ async def upload_target_video(video_file: UploadFile = File(...)): # 或者叫 m
         # 根据 content_type 处理视频或图像
         if content_type.startswith("video/"):
             pose_results = extract_poses_from_video(file_path)
-            TARGET_VIDEO_DATA = {"path": filename, "pose_data": pose_results, "type": "video"}
+            TARGET_VIDEO_DATA = {
+                "path": filename,
+                "pose_data": pose_results,  # pose_results is {'video_info': ..., 'pose_data': [...frames...]}
+                "type": "video",
+                "video_info": pose_results.get("video_info")  # video_info 也存在于 pose_results 中
+            }
+            # TARGET_VIDEO_DATA = {"path": filename, "pose_data": pose_results, "type": "video"}
             media_type = "video"
             media_url = f"/uploads/{filename}"
             # 提取 video_info 以便返回给前端

@@ -31,6 +31,28 @@ const COCO_CONNECTIONS = [
 // 13: left_knee, 14: right_knee, 15: left_ankle, 16: right_ankle
 
 
+// 新增变量用于存储DTW对齐结果和当前查看的对齐帧索引
+let dtwAlignmentData = null;
+let currentAlignedPairIndex = 0;
+let dtwTargetCtx = null;
+let dtwUserCtx = null;
+
+
+// 在 setupInitialCanvas 或页面加载时初始化新的 canvas
+function initializeDTWCanvases() {
+    const dtwTargetCanvas = document.getElementById('dtwTargetCanvas');
+    const dtwUserCanvas = document.getElementById('dtwUserCanvas');
+    if (dtwTargetCanvas && dtwUserCanvas) {
+        dtwTargetCtx = dtwTargetCanvas.getContext('2d');
+        dtwUserCtx = dtwUserCanvas.getContext('2d');
+        setupInitialCanvas(dtwTargetCtx, dtwTargetCanvas, "Aligned target pose");
+        setupInitialCanvas(dtwUserCtx, dtwUserCanvas, "Aligned user pose");
+    }
+}
+// 调用初始化
+window.addEventListener('load', initializeDTWCanvases);
+
+
 async function getVideosComparison() {
     if (!currentTargetMedia.url || !currentUserMedia.url) { // 简单检查，后端也会检查
         feedbackText.textContent = 'Please upload both target and user videos first.';
@@ -42,36 +64,86 @@ async function getVideosComparison() {
     }
 
     feedbackText.textContent = 'Comparing full videos (this may take a moment)...';
+    document.getElementById('videoOverallSimilarity').textContent = '';
+    document.getElementById('videoMostDifferentFramesFeedback').innerHTML = ''; // 使用 innerHTML 来插入多行
+    document.querySelector('.aligned-frames-viewer').style.display = 'none'; // 隐藏帧查看器
+    dtwAlignmentData = null; // 重置
 
     try {
-        const response = await fetch('/api/compare_videos', { method: 'POST' }); // 使用 POST
+        const response = await fetch('/api/compare_videos', { method: 'POST' });
         if (!response.ok) {
             const errorData = await response.json();
             throw new Error(errorData.detail || errorData.error || `HTTP error! status: ${response.status}`);
         }
         const result = await response.json();
+        console.log("Full Video Comparison Result:", result); // 调试用
 
         if (result.dtw_results && result.dtw_results.normalized_dtw_distance !== undefined) {
-            let videoFeedback = `Video Comparison (DTW):\n`;
-            videoFeedback += `  Normalized DTW Distance: ${result.dtw_results.normalized_dtw_distance.toFixed(4)}\n`;
-            videoFeedback += `  (Lower distance means more similar sequences)\n`;
-            // 你可以在这里根据 normalized_dtw_distance 给出一个定性的评价
-            if (result.dtw_results.normalized_dtw_distance < 0.5) { // 示例阈值
-                videoFeedback += `  Overall sequences appear quite similar.`;
-            } else if (result.dtw_results.normalized_dtw_distance < 1.0) {
-                videoFeedback += `  Overall sequences have some similarities.`;
-            } else {
-                videoFeedback += `  Overall sequences appear quite different.`;
-            }
-            // 将这个 videoFeedback 显示在一个新的区域，或者追加到 feedbackText
-            document.getElementById('videoComparisonFeedback').textContent = videoFeedback; // 假设有这个元素
+            dtwAlignmentData = result.dtw_results; // 存储完整的对齐数据
+
+            let overallFeedback = `Overall Video Similarity (Normalized DTW Distance): ${dtwAlignmentData.normalized_dtw_distance.toFixed(4)}\n`;
+            overallFeedback += `(Lower distance means more similar sequences)\n`;
+            // ... (可以添加定性评价) ...
+            document.getElementById('videoOverallSimilarity').textContent = overallFeedback;
+
+            let diffFramesHtml = "<p>Details for most different aligned frames:</p><ul>";
+            dtwAlignmentData.most_different_frames_feedback.forEach(item => {
+                diffFramesHtml += `<li>Target Frame ${item.target_frame_id} vs User Frame ${item.user_frame_id} (Diff Score: ${item.difference_score.toFixed(2)}):<ul>`;
+                item.detailed_feedback.forEach(fb_line => {
+                    diffFramesHtml += `<li>${fb_line.replace(/^---.*---/, '').trim()}</li>`; // 清理一下标题
+                });
+                diffFramesHtml += `</ul></li>`;
+            });
+            diffFramesHtml += "</ul>";
+            document.getElementById('videoMostDifferentFramesFeedback').innerHTML = diffFramesHtml;
+
             feedbackText.textContent = "Full video comparison done. See results below.";
 
+            // 如果有对齐路径，显示帧查看器
+            if (dtwAlignmentData.original_target_frame_ids_in_path && dtwAlignmentData.original_target_frame_ids_in_path.length > 0) {
+                document.querySelector('.aligned-frames-viewer').style.display = 'block';
+                currentAlignedPairIndex = 0;
+                displayCurrentAlignedPair();
+            }
+
         } else if (result.dtw_results && result.dtw_results.error) {
-             document.getElementById('videoComparisonFeedback').textContent = `Video Comparison Error: ${result.dtw_results.error}`;
+            document.getElementById('videoOverallSimilarity').textContent = `Video Comparison Error: ${result.dtw_results.error}`;
         } else {
-             document.getElementById('videoComparisonFeedback').textContent = 'Could not get DTW results for video comparison.';
+            document.getElementById('videoOverallSimilarity').textContent = 'Could not get DTW results for video comparison.';
         }
+
+
+//    feedbackText.textContent = 'Comparing full videos (this may take a moment)...';
+//
+//    try {
+//        const response = await fetch('/api/compare_videos', { method: 'POST' }); // 使用 POST
+//        if (!response.ok) {
+//            const errorData = await response.json();
+//            throw new Error(errorData.detail || errorData.error || `HTTP error! status: ${response.status}`);
+//        }
+//        const result = await response.json();
+//
+//        if (result.dtw_results && result.dtw_results.normalized_dtw_distance !== undefined) {
+//            let videoFeedback = `Video Comparison (DTW):\n`;
+//            videoFeedback += `  Normalized DTW Distance: ${result.dtw_results.normalized_dtw_distance.toFixed(4)}\n`;
+//            videoFeedback += `  (Lower distance means more similar sequences)\n`;
+//            // 你可以在这里根据 normalized_dtw_distance 给出一个定性的评价
+//            if (result.dtw_results.normalized_dtw_distance < 0.5) { // 示例阈值
+//                videoFeedback += `  Overall sequences appear quite similar.`;
+//            } else if (result.dtw_results.normalized_dtw_distance < 1.0) {
+//                videoFeedback += `  Overall sequences have some similarities.`;
+//            } else {
+//                videoFeedback += `  Overall sequences appear quite different.`;
+//            }
+//            // 将这个 videoFeedback 显示在一个新的区域，或者追加到 feedbackText
+//            document.getElementById('videoComparisonFeedback').textContent = videoFeedback; // 假设有这个元素
+//            feedbackText.textContent = "Full video comparison done. See results below.";
+//
+//        } else if (result.dtw_results && result.dtw_results.error) {
+//             document.getElementById('videoComparisonFeedback').textContent = `Video Comparison Error: ${result.dtw_results.error}`;
+//        } else {
+//             document.getElementById('videoComparisonFeedback').textContent = 'Could not get DTW results for video comparison.';
+//        }
 
     } catch (error) {
         console.error('Video comparison error:', error);
@@ -79,6 +151,79 @@ async function getVideosComparison() {
          feedbackText.textContent = "Error during full video comparison.";
     }
 }
+
+function displayCurrentAlignedPair() {
+    if (!dtwAlignmentData || !dtwAlignmentData.original_target_frame_ids_in_path || dtwAlignmentData.original_target_frame_ids_in_path.length === 0) {
+        return;
+    }
+    const pathLen = dtwAlignmentData.original_target_frame_ids_in_path.length;
+    if (currentAlignedPairIndex < 0 || currentAlignedPairIndex >= pathLen) {
+        return;
+    }
+
+    const targetFrameId = dtwAlignmentData.original_target_frame_ids_in_path[currentAlignedPairIndex];
+    const userFrameId = dtwAlignmentData.original_user_frame_ids_in_path[currentAlignedPairIndex];
+
+    document.getElementById('alignedFrameIndicator').textContent = `Pair ${currentAlignedPairIndex + 1}/${pathLen}`;
+    document.getElementById('dtwTargetFrameId').textContent = targetFrameId;
+    document.getElementById('dtwUserFrameId').textContent = userFrameId;
+
+    // 获取对应帧的keypoints
+    const targetKps = getKeypointsForFrameId(currentTargetMedia.poseData, targetFrameId); // poseData是帧列表
+    const userKps = getKeypointsForFrameId(currentUserMedia.poseData, userFrameId);     // poseData是帧列表
+
+    const targetInfo = currentTargetMedia.type === 'video' ? currentTargetMedia.videoInfo : currentTargetMedia.imageInfo;
+    const userInfo = currentUserMedia.type === 'video' ? currentUserMedia.videoInfo : currentUserMedia.imageInfo;
+
+    if (targetKps && targetInfo && targetInfo.width && targetInfo.height) {
+        drawPoseOnCanvas(dtwTargetCtx, document.getElementById('dtwTargetCanvas'), targetKps, targetInfo.width, targetInfo.height, 'cyan');
+    } else {
+        setupInitialCanvas(dtwTargetCtx, document.getElementById('dtwTargetCanvas'), "Target pose data missing for this aligned frame.");
+    }
+
+    if (userKps && userInfo && userInfo.width && userInfo.height) {
+        drawPoseOnCanvas(dtwUserCtx, document.getElementById('dtwUserCanvas'), userKps, userInfo.width, userInfo.height, 'magenta');
+    } else {
+         setupInitialCanvas(dtwUserCtx, document.getElementById('dtwUserCanvas'), "User pose data missing for this aligned frame.");
+    }
+
+    // 显示当前对齐帧的详细对比 (需要从后端获取或在前端重新计算)
+    // 为了简单，我们先从 dtwAlignmentData.most_different_frames_feedback 中查找，如果存在的话
+    let currentPairFbText = `Comparing Target Frame ${targetFrameId} with User Frame ${userFrameId}\n`;
+    const foundFb = dtwAlignmentData.most_different_frames_feedback.find(
+        item => item.target_frame_id === targetFrameId && item.user_frame_id === userFrameId
+    );
+    if (foundFb) {
+        currentPairFbText += foundFb.detailed_feedback.join('\n');
+    } else {
+        // 如果不在 top N 差异中，可以提示用户或调用一个轻量级的单帧比较
+        // 或者后端应该返回所有对齐帧的差异（如果性能允许）
+         currentPairFbText += "(This pair is not in the top N most different frames. Detailed feedback might be limited here or recalculate if needed)";
+         // 你可以调用一个简化的前端比较函数，或者从后端获取更详细的
+    }
+    document.getElementById('currentAlignedPairFeedback').textContent = currentPairFbText;
+}
+
+function getKeypointsForFrameId(poseDataArray, frameId) {
+    if (!poseDataArray) return null;
+    const frame = poseDataArray.find(f => f.frame_id === frameId);
+    return frame ? frame.keypoints : null;
+}
+
+function prevAlignedFrame() {
+    if (dtwAlignmentData && currentAlignedPairIndex > 0) {
+        currentAlignedPairIndex--;
+        displayCurrentAlignedPair();
+    }
+}
+
+function nextAlignedFrame() {
+    if (dtwAlignmentData && currentAlignedPairIndex < dtwAlignmentData.original_target_frame_ids_in_path.length - 1) {
+        currentAlignedPairIndex++;
+        displayCurrentAlignedPair();
+    }
+}
+
 
 async function uploadMedia(fileInput, statusElement, displayElement, endpoint, mediaStore) {
     const file = fileInput.files[0];
