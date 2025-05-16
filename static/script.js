@@ -153,56 +153,188 @@ async function getVideosComparison() {
 }
 
 function displayCurrentAlignedPair() {
-    if (!dtwAlignmentData || !dtwAlignmentData.original_target_frame_ids_in_path || dtwAlignmentData.original_target_frame_ids_in_path.length === 0) {
+    // 1. 检查DTW对齐数据是否存在且有效
+    if (!dtwAlignmentData ||
+        !dtwAlignmentData.original_target_frame_ids_in_path ||
+        dtwAlignmentData.original_target_frame_ids_in_path.length === 0 ||
+        !dtwAlignmentData.original_user_frame_ids_in_path || // 也检查user的路径
+        dtwAlignmentData.original_user_frame_ids_in_path.length !== dtwAlignmentData.original_target_frame_ids_in_path.length // 确保路径长度一致
+    ) {
+        console.warn("displayCurrentAlignedPair: DTW alignment data is not ready, incomplete, or paths have different lengths.");
+        // 可以考虑在这里清除或重置相关的显示区域
+        document.getElementById('alignedFrameIndicator').textContent = "N/A";
+        document.getElementById('dtwTargetFrameId').textContent = "?";
+        document.getElementById('dtwUserFrameId').textContent = "?";
+        if (dtwTargetCtx) setupInitialCanvas(dtwTargetCtx, document.getElementById('dtwTargetCanvas'), "DTW data unavailable.");
+        if (dtwUserCtx) setupInitialCanvas(dtwUserCtx, document.getElementById('dtwUserCanvas'), "DTW data unavailable.");
+        document.getElementById('currentAlignedPairFeedback').textContent = "DTW alignment data not available to display pair.";
         return;
     }
+
     const pathLen = dtwAlignmentData.original_target_frame_ids_in_path.length;
+
+    // 2. 检查当前对齐帧索引是否在有效范围内
     if (currentAlignedPairIndex < 0 || currentAlignedPairIndex >= pathLen) {
+        console.warn(`displayCurrentAlignedPair: currentAlignedPairIndex (${currentAlignedPairIndex}) is out of bounds (0-${pathLen - 1}).`);
+        // 可以选择重置索引或不执行任何操作
+        // currentAlignedPairIndex = Math.max(0, Math.min(currentAlignedPairIndex, pathLen - 1)); // Clamp index
         return;
     }
 
-    const targetFrameId = dtwAlignmentData.original_target_frame_ids_in_path[currentAlignedPairIndex];
-    const userFrameId = dtwAlignmentData.original_user_frame_ids_in_path[currentAlignedPairIndex];
+    // 3. 获取当前对齐帧的Target和User的原始帧ID
+    const targetFrameIdFromDTW = dtwAlignmentData.original_target_frame_ids_in_path[currentAlignedPairIndex];
+    const userFrameIdFromDTW = dtwAlignmentData.original_user_frame_ids_in_path[currentAlignedPairIndex];
 
+    // 更新UI显示当前的帧ID和对齐进度
     document.getElementById('alignedFrameIndicator').textContent = `Pair ${currentAlignedPairIndex + 1}/${pathLen}`;
-    document.getElementById('dtwTargetFrameId').textContent = targetFrameId;
-    document.getElementById('dtwUserFrameId').textContent = userFrameId;
+    document.getElementById('dtwTargetFrameId').textContent = targetFrameIdFromDTW;
+    document.getElementById('dtwUserFrameId').textContent = userFrameIdFromDTW;
 
-    // 获取对应帧的keypoints
-    const targetKps = getKeypointsForFrameId(currentTargetMedia.poseData, targetFrameId); // poseData是帧列表
-    const userKps = getKeypointsForFrameId(currentUserMedia.poseData, userFrameId);     // poseData是帧列表
+    // --- 开始详细的日志记录 ---
+    console.log(`--- Displaying Aligned Pair - Index: ${currentAlignedPairIndex} ---`);
+    console.log(`  DTW Path Target Frame ID: ${targetFrameIdFromDTW}`);
+    console.log(`  DTW Path User Frame ID: ${userFrameIdFromDTW}`);
 
+    // 4. 准备 Target Pose 的数据
+    // console.log("  currentTargetMedia (for Target):", JSON.parse(JSON.stringify(currentTargetMedia))); // 深拷贝打印，避免引用问题
+    const targetKps = getKeypointsForFrameId(currentTargetMedia.poseData, targetFrameIdFromDTW);
     const targetInfo = currentTargetMedia.type === 'video' ? currentTargetMedia.videoInfo : currentTargetMedia.imageInfo;
+    // console.log(`  Target Keypoints for Frame ${targetFrameIdFromDTW}:`, targetKps);
+    // console.log(`  Target Media Info:`, targetInfo);
+
+    // 5. 准备 User Pose 的数据
+    // console.log("  currentUserMedia (for User):", JSON.parse(JSON.stringify(currentUserMedia))); // 深拷贝打印
+    const userKps = getKeypointsForFrameId(currentUserMedia.poseData, userFrameIdFromDTW);
     const userInfo = currentUserMedia.type === 'video' ? currentUserMedia.videoInfo : currentUserMedia.imageInfo;
+    // console.log(`  User Keypoints for Frame ${userFrameIdFromDTW}:`, userKps);
+    // console.log(`  User Media Info:`, userInfo);
 
+    // 6. 获取Canvas上下文 (确保它们已在页面加载时初始化到 dtwTargetCtx 和 dtwUserCtx)
+    const targetCanvasEl = document.getElementById('dtwTargetCanvas');
+    const userCanvasEl = document.getElementById('dtwUserCanvas');
+    // dtwTargetCtx 和 dtwUserCtx 应该已经是全局或可访问的上下文变量
+
+    // 7. 绘制 Target Pose
     if (targetKps && targetInfo && targetInfo.width && targetInfo.height) {
-        drawPoseOnCanvas(dtwTargetCtx, document.getElementById('dtwTargetCanvas'), targetKps, targetInfo.width, targetInfo.height, 'cyan');
+        // console.log(`  Drawing Target Pose: Frame ${targetFrameIdFromDTW}, Original W/H ${targetInfo.width}/${targetInfo.height}`);
+        drawPoseOnCanvas(dtwTargetCtx, targetCanvasEl, targetKps, targetInfo.width, targetInfo.height, 'cyan');
     } else {
-        setupInitialCanvas(dtwTargetCtx, document.getElementById('dtwTargetCanvas'), "Target pose data missing for this aligned frame.");
+        console.error(`  Failed to draw Target Pose. Reason(s):`);
+        if (!targetKps) {
+            console.error(`    - targetKps is null/undefined for targetFrameId: ${targetFrameIdFromDTW}.`);
+            if (currentTargetMedia.poseData && Array.isArray(currentTargetMedia.poseData)) {
+                console.log("    Available frame_ids in currentTargetMedia.poseData:", currentTargetMedia.poseData.map(f => f ? f.frame_id : 'null_frame_in_array'));
+            } else {
+                console.log("    currentTargetMedia.poseData itself is not an array or is null/undefined:", currentTargetMedia.poseData);
+            }
+        }
+        if (!targetInfo) {
+            console.error(`    - targetInfo is null or undefined for Target.`);
+        } else if (!targetInfo.width || !targetInfo.height) {
+            console.error(`    - targetInfo.width or targetInfo.height is missing/invalid for Target. targetInfo:`, targetInfo);
+        }
+        setupInitialCanvas(dtwTargetCtx, targetCanvasEl, "Target pose data missing for this aligned frame.");
     }
 
+    // 8. 绘制 User Pose
     if (userKps && userInfo && userInfo.width && userInfo.height) {
-        drawPoseOnCanvas(dtwUserCtx, document.getElementById('dtwUserCanvas'), userKps, userInfo.width, userInfo.height, 'magenta');
+        // console.log(`  Drawing User Pose: Frame ${userFrameIdFromDTW}, Original W/H ${userInfo.width}/${userInfo.height}`);
+        drawPoseOnCanvas(dtwUserCtx, userCanvasEl, userKps, userInfo.width, userInfo.height, 'magenta');
     } else {
-         setupInitialCanvas(dtwUserCtx, document.getElementById('dtwUserCanvas'), "User pose data missing for this aligned frame.");
+        console.error(`  Failed to draw User Pose. Reason(s):`);
+        if (!userKps) {
+            console.error(`    - userKps is null or undefined for userFrameId: ${userFrameIdFromDTW}.`);
+             if (currentUserMedia.poseData && Array.isArray(currentUserMedia.poseData)) {
+                console.log("    Available frame_ids in currentUserMedia.poseData:", currentUserMedia.poseData.map(f => f ? f.frame_id : 'null_frame_in_array'));
+            } else {
+                console.log("    currentUserMedia.poseData itself is not an array or is null/undefined:", currentUserMedia.poseData);
+            }
+        }
+        if (!userInfo) {
+            console.error(`    - userInfo is null or undefined for User.`);
+        } else if (!userInfo.width || !userInfo.height) {
+            console.error(`    - userInfo.width or userInfo.height is missing/invalid for User. userInfo:`, userInfo);
+        }
+        setupInitialCanvas(dtwUserCtx, userCanvasEl, "User pose data missing for this aligned frame.");
     }
 
-    // 显示当前对齐帧的详细对比 (需要从后端获取或在前端重新计算)
-    // 为了简单，我们先从 dtwAlignmentData.most_different_frames_feedback 中查找，如果存在的话
-    let currentPairFbText = `Comparing Target Frame ${targetFrameId} with User Frame ${userFrameId}\n`;
-    const foundFb = dtwAlignmentData.most_different_frames_feedback.find(
-        item => item.target_frame_id === targetFrameId && item.user_frame_id === userFrameId
+    // 9. 显示当前对齐帧的详细对比反馈
+    let currentPairFbText = `Feedback for Aligned Pair (Target Frame ${targetFrameIdFromDTW} vs User Frame ${userFrameIdFromDTW}):\n`;
+    const foundFbItem = dtwAlignmentData.most_different_frames_feedback.find(
+        item => item.target_frame_id === targetFrameIdFromDTW && item.user_frame_id === userFrameIdFromDTW
     );
-    if (foundFb) {
-        currentPairFbText += foundFb.detailed_feedback.join('\n');
+
+    if (foundFbItem && foundFbItem.detailed_feedback) {
+        // 清理和格式化反馈
+        currentPairFbText += foundFbItem.detailed_feedback
+            .map(line => line.replace(/^---.*---/, '').trim()) // 移除标题行并修剪空格
+            .filter(line => line.length > 0) // 移除空行
+            .join('\n');
     } else {
-        // 如果不在 top N 差异中，可以提示用户或调用一个轻量级的单帧比较
-        // 或者后端应该返回所有对齐帧的差异（如果性能允许）
-         currentPairFbText += "(This pair is not in the top N most different frames. Detailed feedback might be limited here or recalculate if needed)";
-         // 你可以调用一个简化的前端比较函数，或者从后端获取更详细的
+        currentPairFbText += "\n(This specific pair is not among the top N most different frames for detailed feedback, or feedback is unavailable.)";
+        // 考虑：如果后端没有返回所有对齐帧的 detailed_feedback，
+        // 这里可以调用一个轻量级的前端单帧比较函数（如果需要实时反馈），
+        // 或者提示用户此帧的详细反馈未预先计算。
+        // e.g., if (typeof frontendSimpleCompare === 'function') {
+        //    const feComparison = frontendSimpleCompare(targetKps, userKps); // 需要一个这样的函数
+        //    currentPairFbText += "\n\nFrontend Basic Check:\n" + feComparison.join('\n');
+        // }
     }
     document.getElementById('currentAlignedPairFeedback').textContent = currentPairFbText;
+    console.log(`--- End Displaying Aligned Pair ---`);
 }
+
+//function displayCurrentAlignedPair() {
+//    if (!dtwAlignmentData || !dtwAlignmentData.original_target_frame_ids_in_path || dtwAlignmentData.original_target_frame_ids_in_path.length === 0) {
+//        return;
+//    }
+//    const pathLen = dtwAlignmentData.original_target_frame_ids_in_path.length;
+//    if (currentAlignedPairIndex < 0 || currentAlignedPairIndex >= pathLen) {
+//        return;
+//    }
+//
+//    const targetFrameId = dtwAlignmentData.original_target_frame_ids_in_path[currentAlignedPairIndex];
+//    const userFrameId = dtwAlignmentData.original_user_frame_ids_in_path[currentAlignedPairIndex];
+//
+//    document.getElementById('alignedFrameIndicator').textContent = `Pair ${currentAlignedPairIndex + 1}/${pathLen}`;
+//    document.getElementById('dtwTargetFrameId').textContent = targetFrameId;
+//    document.getElementById('dtwUserFrameId').textContent = userFrameId;
+//
+//    // 获取对应帧的keypoints
+//    const targetKps = getKeypointsForFrameId(currentTargetMedia.poseData, targetFrameId); // poseData是帧列表
+//    const userKps = getKeypointsForFrameId(currentUserMedia.poseData, userFrameId);     // poseData是帧列表
+//
+//    const targetInfo = currentTargetMedia.type === 'video' ? currentTargetMedia.videoInfo : currentTargetMedia.imageInfo;
+//    const userInfo = currentUserMedia.type === 'video' ? currentUserMedia.videoInfo : currentUserMedia.imageInfo;
+//
+//    if (targetKps && targetInfo && targetInfo.width && targetInfo.height) {
+//        drawPoseOnCanvas(dtwTargetCtx, document.getElementById('dtwTargetCanvas'), targetKps, targetInfo.width, targetInfo.height, 'cyan');
+//    } else {
+//        setupInitialCanvas(dtwTargetCtx, document.getElementById('dtwTargetCanvas'), "Target pose data missing for this aligned frame.");
+//    }
+//
+//    if (userKps && userInfo && userInfo.width && userInfo.height) {
+//        drawPoseOnCanvas(dtwUserCtx, document.getElementById('dtwUserCanvas'), userKps, userInfo.width, userInfo.height, 'magenta');
+//    } else {
+//         setupInitialCanvas(dtwUserCtx, document.getElementById('dtwUserCanvas'), "User pose data missing for this aligned frame.");
+//    }
+//
+//    // 显示当前对齐帧的详细对比 (需要从后端获取或在前端重新计算)
+//    // 为了简单，我们先从 dtwAlignmentData.most_different_frames_feedback 中查找，如果存在的话
+//    let currentPairFbText = `Comparing Target Frame ${targetFrameId} with User Frame ${userFrameId}\n`;
+//    const foundFb = dtwAlignmentData.most_different_frames_feedback.find(
+//        item => item.target_frame_id === targetFrameId && item.user_frame_id === userFrameId
+//    );
+//    if (foundFb) {
+//        currentPairFbText += foundFb.detailed_feedback.join('\n');
+//    } else {
+//        // 如果不在 top N 差异中，可以提示用户或调用一个轻量级的单帧比较
+//        // 或者后端应该返回所有对齐帧的差异（如果性能允许）
+//         currentPairFbText += "(This pair is not in the top N most different frames. Detailed feedback might be limited here or recalculate if needed)";
+//         // 你可以调用一个简化的前端比较函数，或者从后端获取更详细的
+//    }
+//    document.getElementById('currentAlignedPairFeedback').textContent = currentPairFbText;
+//}
 
 function getKeypointsForFrameId(poseDataArray, frameId) {
     if (!poseDataArray) return null;
