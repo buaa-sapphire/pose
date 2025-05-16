@@ -1,0 +1,6 @@
+# Large model files
+models/rtmdet_m_8xb32-100e_coco-obj365-person-235e8209.pth
+models/td-hm_ViTPose-base_8xb64-210e_coco-256x192-216eae50_20230314.pth
+
+# 或者，如果你想忽略 models 文件夹下所有的 .pth 文件
+# models/*.pth
