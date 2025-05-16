@@ -919,4 +919,6 @@ setupInitialCanvas(userCtx, userCanvas, "User pose will appear here.");
 *   **前端框架**: 对于更复杂的UI，使用 Vue.js 或 React 会使开发更高效。
 *   **滑雪等特定运动**: 可能需要针对性的关键点定义或微调模型，因为标准 COCO 关键点可能不足以捕捉所有细节。
 
-这个框架为你提供了一个起点。你的 4090 显卡对于 MMPose 的推理来说性能是足够的，关键在于设计好分析和对比的逻辑。祝你项目顺利！
+
+
+
