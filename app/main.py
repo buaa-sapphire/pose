@@ -9,6 +9,7 @@ import shutil  # For removing temp files
 from .pose_estimator import extract_poses_from_video, extract_pose_from_image, get_inferencer
 from .analysis import simple_compare_poses
 from .utils import save_uploaded_file, UPLOAD_DIR, RESULTS_DIR
+# from mmpose.apis import MMPoseInferencer # 直接导入
 
 app = FastAPI()
 
@@ -36,29 +37,82 @@ async def startup_event():
         # For now, we'll let it try again on the first API call if it fails here.
 
 
+# @app.post("/api/upload_target")
+# async def upload_target_video(video_file: UploadFile = File(...)):
+#     global TARGET_VIDEO_DATA
+#     try:  # <--- 添加 try
+#         file_path, filename = save_uploaded_file(video_file)
+#         # 下面这行是关键调用
+#         pose_results = extract_poses_from_video(file_path)
+#
+#         pose_json_path = os.path.join(RESULTS_DIR, f"target_{os.path.splitext(filename)[0]}.json")
+#         with open(pose_json_path, 'w') as f:
+#             json.dump(pose_results, f)  # 这里也可能因为 pose_results 不可序列化而出错
+#
+#         TARGET_VIDEO_DATA = {"path": filename, "pose_data": pose_results, "type": "video"}
+#         return JSONResponse(content={
+#             "message": "Target video uploaded and processed.",
+#             "filename": filename,
+#             "pose_data_summary": f"{len(pose_results['pose_data'])} frames processed.",
+#             "video_url": f"/uploads/{filename}"
+#         })
+#     except Exception as e:  # <--- 添加 except
+#         print("!!! ERROR IN /api/upload_target !!!")
+#         traceback.print_exc()  # 打印完整的堆栈跟踪到后端控制台
+#         raise HTTPException(status_code=500, detail=f"Error processing target video: {str(e)}")
+
 @app.post("/api/upload_target")
-async def upload_target_video(video_file: UploadFile = File(...)):
+async def upload_target_video(video_file: UploadFile = File(...)): # 或者叫 media_file 更通用
     global TARGET_VIDEO_DATA
-    try:  # <--- 添加 try
+    try:
         file_path, filename = save_uploaded_file(video_file)
-        # 下面这行是关键调用
-        pose_results = extract_poses_from_video(file_path)
+        content_type = video_file.content_type # 获取 content_type
 
-        pose_json_path = os.path.join(RESULTS_DIR, f"target_{os.path.splitext(filename)[0]}.json")
-        with open(pose_json_path, 'w') as f:
-            json.dump(pose_results, f)  # 这里也可能因为 pose_results 不可序列化而出错
+        # 根据 content_type 处理视频或图像
+        if content_type.startswith("video/"):
+            pose_results = extract_poses_from_video(file_path)
+            TARGET_VIDEO_DATA = {"path": filename, "pose_data": pose_results, "type": "video"}
+            media_type = "video"
+            media_url = f"/uploads/{filename}"
+            # 提取 video_info 以便返回给前端
+            video_info_to_return = pose_results.get("video_info")
+            image_info_to_return = None
 
-        TARGET_VIDEO_DATA = {"path": filename, "pose_data": pose_results, "type": "video"}
+        elif content_type.startswith("image/"):
+            pose_results = extract_pose_from_image(file_path)
+            TARGET_VIDEO_DATA = {"path": filename, "pose_data": pose_results, "type": "image"}
+            media_type = "image"
+            media_url = f"/uploads/{filename}"
+            # 提取 image_info 以便返回给前端
+            image_info_to_return = pose_results.get("image_info")
+            video_info_to_return = None
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported file type for target. Please upload video or image.")
+
+
+        # pose_json_path = os.path.join(RESULTS_DIR, f"target_{os.path.splitext(filename)[0]}.json")
+        # with open(pose_json_path, 'w') as f:
+        #     json.dump(pose_results, f)
+
         return JSONResponse(content={
-            "message": "Target video uploaded and processed.",
+            "message": f"Target {media_type} uploaded and processed.",
             "filename": filename,
-            "pose_data_summary": f"{len(pose_results['pose_data'])} frames processed.",
-            "video_url": f"/uploads/{filename}"
+            # 根据你的前端，pose_data_summary 可能需要调整
+            "pose_data_summary": f"{len(pose_results.get('pose_data', []))} frames/objects processed.",
+            "media_url": media_url, # 统一键名
+            "media_type": media_type, # 添加 media_type
+            # 返回原始的 video_info 或 image_info
+            "raw_pose_data": { # 保持与 user 端一致的结构，方便前端处理
+                "video_info": video_info_to_return,
+                "image_info": image_info_to_return,
+                # 注意：这里不直接返回 pose_data, 因为 target 的 pose_data 是通过 /api/compare 获取的
+                # 如果你希望 target 上传后就能直接画单帧，可以考虑返回第一帧的 pose
+            }
         })
-    except Exception as e:  # <--- 添加 except
+    except Exception as e:
         print("!!! ERROR IN /api/upload_target !!!")
-        traceback.print_exc()  # 打印完整的堆栈跟踪到后端控制台
-        raise HTTPException(status_code=500, detail=f"Error processing target video: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error processing target media: {str(e)}")
 
 
 @app.post("/api/upload_user")
@@ -137,6 +191,14 @@ async def compare_results(frame_id: int = 0):  # Compare a specific frame, defau
             target_frame_to_compare] if TARGET_VIDEO_DATA.get("pose_data", {}).get("pose_data") else None,
         "compared_frame_id": frame_id
     })
+
+
+# 在 app/main.py 文件中
+@app.on_event("shutdown")
+async def shutdown_event():
+    print("Application shutdown: Cleaning up resources...")
+    # 在这里添加任何自定义清理代码
+    # 注意：MMPoseInferencer 应该会管理它自己的资源。
 
 
 # Serve the main HTML page

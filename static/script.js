@@ -140,6 +140,9 @@ async function getComparison() {
         // Target Pose
         if (result.target_pose_frame_data && result.target_pose_frame_data.keypoints) {
             const targetInfo = currentTargetMedia.type === 'video' ? currentTargetMedia.videoInfo : currentTargetMedia.imageInfo;
+
+            console.log('Target Pose Keypoints:', result.target_pose_frame_data.keypoints);
+
             if (targetInfo && targetInfo.width && targetInfo.height) {
                 drawPoseOnCanvas(targetCtx, targetCanvas, result.target_pose_frame_data.keypoints, targetInfo.width, targetInfo.height, 'blue');
             } else {

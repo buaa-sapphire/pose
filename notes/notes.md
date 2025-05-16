@@ -387,14 +387,16 @@ def simple_compare_poses(pose_data_user, pose_data_target, frame_id=0):
 ```
 
 **`app/utils.py`**
+
 ```python
 import os
 import uuid
 
-UPLOAD_DIR = "uploads"
-RESULTS_DIR = "results"
+UPLOAD_DIR = "../uploads"
+RESULTS_DIR = "../results"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(RESULTS_DIR, exist_ok=True)
+
 
 def save_uploaded_file(file, directory=UPLOAD_DIR):
     # Ensure filename is safe and unique

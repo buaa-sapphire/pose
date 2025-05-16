@@ -23,17 +23,45 @@ print(f"MMCV: {mmcv.__version__}")
 # MODEL_ALIAS = 'td-hm_ViTPose-base_8xb64-210e_coco-256x192'  # 或者 'hrnet_w48_coco_256x192'
 MODEL_ALIAS = 'td-hm_hrnet-w48_udp-8xb32-210e_coco-256x192'  # 或者 'hrnet_w48_coco_256x192'
 
-INFERENCER = None
+# INFERENCER = None
+#
+#
+# def get_inferencer():
+#     global INFERENCER
+#     if INFERENCER is None:
+#         print(f"Initializing MMPoseInferencer with model: {MODEL_ALIAS}")
+#         INFERENCER = MMPoseInferencer(pose2d=MODEL_ALIAS, device='cuda:0')
+#         print("MMPoseInferencer initialized.")
+#     return INFERENCER
 
+_inferencer = None
 
 def get_inferencer():
-    global INFERENCER
-    if INFERENCER is None:
-        print(f"Initializing MMPoseInferencer with model: {MODEL_ALIAS}")
-        INFERENCER = MMPoseInferencer(pose2d=MODEL_ALIAS, device='cuda:0')
-        print("MMPoseInferencer initialized.")
-    return INFERENCER
+    global _inferencer
+    if _inferencer is None:
+        print("Initializing MMPoseInferencer with pose model: td-hm_hrnet-w48_udp-8xb32-210e_coco-256x192")
+        print("And detection model (using MMDetection alias/config)")
+        try:
+            _inferencer = MMPoseInferencer(
+                pose2d='td-hm_hrnet-w48_udp-8xb32-210e_coco-256x192', # 姿态模型
+                # --- 修改这里 ---
+                # 尝试使用 MMDetection 的标准模型名称或配置文件路径
+                # 1. 尝试使用模型别名 (如果 MMPoseInferencer 支持)
+                det_model='rtmdet-m', # 或者 'rtmdet_m_8xb32-100e_coco-obj365-person' (需要确认MMDet中准确的名称)
+                # 2. 或者提供 MMDetection 配置文件的相对路径或绝对路径 (如果知道)
+                # det_model='configs/rtmdet/rtmdet_m_8xb32-100e_coco-obj365-person.py', # 假设在MMDet的configs目录下
+                # 权重会自动下载或从本地缓存加载 (如果模型名称已知)
 
+                # --- 权重文件可以单独指定，或者让 MMDetection 根据模型名称自动处理 ---
+                # det_weights='https://download.openmmlab.com/mmpose/v1/projects/rtmposev1/rtmdet_m_8xb32-100e_coco-obj365-person-235e8209.pth',
+
+                det_cat_ids=[0] # 目标检测类别 ID, 0 通常是 COCO 中的 'person'
+            )
+            print("MMPoseInferencer initialized successfully.")
+        except Exception as e:
+            print(f"!!! Error during MMPoseInferencer initialization: {e}") # 更明确的错误日志
+            raise # 重新抛出异常，以便上层能捕获或 FastAPI 能记录
+    return _inferencer
 
 def extract_poses_from_video(video_path: str, output_dir: str = "results"):
     os.makedirs(output_dir, exist_ok=True)
