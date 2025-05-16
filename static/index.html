@@ -36,6 +36,17 @@
         </div>
     </div>
 
+    <!-- ****** 新增视频对比功能 ****** -->
+    <div class="analysis-section"> <!-- 可以复用 analysis-section 样式，或者新建 -->
+        <h2>4. Full Video Comparison (Experimental)</h2>
+        <button onclick="getVideosComparison()">Compare Full Videos</button>
+        <div id="videoComparisonResult"> <!-- 和JS中的ID对应 -->
+            <h3>Full Video Comparison Feedback:</h3>
+            <pre id="videoComparisonFeedback"></pre> <!-- 和JS中的ID对应 -->
+        </div>
+    </div>
+    <!-- ****** 结束新增视频对比功能 ****** -->
+
     <h2>Visual Comparison</h2>
     <div class="canvas-container">
         <div>

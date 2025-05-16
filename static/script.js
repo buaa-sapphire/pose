@@ -30,6 +30,56 @@ const COCO_CONNECTIONS = [
 // 9: left_wrist, 10: right_wrist, 11: left_hip, 12: right_hip,
 // 13: left_knee, 14: right_knee, 15: left_ankle, 16: right_ankle
 
+
+async function getVideosComparison() {
+    if (!currentTargetMedia.url || !currentUserMedia.url) { // 简单检查，后端也会检查
+        feedbackText.textContent = 'Please upload both target and user videos first.';
+        return;
+    }
+     if (currentTargetMedia.type !== 'video' || currentUserMedia.type !== 'video') {
+        feedbackText.textContent = 'Full video comparison is only for video types.';
+        return;
+    }
+
+    feedbackText.textContent = 'Comparing full videos (this may take a moment)...';
+
+    try {
+        const response = await fetch('/api/compare_videos', { method: 'POST' }); // 使用 POST
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || errorData.error || `HTTP error! status: ${response.status}`);
+        }
+        const result = await response.json();
+
+        if (result.dtw_results && result.dtw_results.normalized_dtw_distance !== undefined) {
+            let videoFeedback = `Video Comparison (DTW):\n`;
+            videoFeedback += `  Normalized DTW Distance: ${result.dtw_results.normalized_dtw_distance.toFixed(4)}\n`;
+            videoFeedback += `  (Lower distance means more similar sequences)\n`;
+            // 你可以在这里根据 normalized_dtw_distance 给出一个定性的评价
+            if (result.dtw_results.normalized_dtw_distance < 0.5) { // 示例阈值
+                videoFeedback += `  Overall sequences appear quite similar.`;
+            } else if (result.dtw_results.normalized_dtw_distance < 1.0) {
+                videoFeedback += `  Overall sequences have some similarities.`;
+            } else {
+                videoFeedback += `  Overall sequences appear quite different.`;
+            }
+            // 将这个 videoFeedback 显示在一个新的区域，或者追加到 feedbackText
+            document.getElementById('videoComparisonFeedback').textContent = videoFeedback; // 假设有这个元素
+            feedbackText.textContent = "Full video comparison done. See results below.";
+
+        } else if (result.dtw_results && result.dtw_results.error) {
+             document.getElementById('videoComparisonFeedback').textContent = `Video Comparison Error: ${result.dtw_results.error}`;
+        } else {
+             document.getElementById('videoComparisonFeedback').textContent = 'Could not get DTW results for video comparison.';
+        }
+
+    } catch (error) {
+        console.error('Video comparison error:', error);
+        document.getElementById('videoComparisonFeedback').textContent = `Error: ${error.message}`;
+         feedbackText.textContent = "Error during full video comparison.";
+    }
+}
+
 async function uploadMedia(fileInput, statusElement, displayElement, endpoint, mediaStore) {
     const file = fileInput.files[0];
     if (!file) {
@@ -252,3 +302,5 @@ function setupInitialCanvas(ctx, canvas, text) {
 }
 setupInitialCanvas(targetCtx, targetCanvas, "Target pose will appear here.");
 setupInitialCanvas(userCtx, userCanvas, "User pose will appear here.");
+
+
