@@ -183,8 +183,26 @@ function displayCurrentAlignedPair() {
     // dtwTargetCtx 和 dtwUserCtx 应该已经是全局或可访问的上下文变量
 
     // 7. 绘制 Target Pose
+    console.log("Checking variables for pose analysis:");
+    console.log("targetKps:", targetKps);
+    console.log("targetInfo:", targetInfo);
+
+    if (!targetKps) {
+        console.error("Error: targetKps is undefined or null.");
+    }
+    if (!targetInfo) {
+        console.error("Error: targetInfo is undefined or null.");
+    } else {
+        console.log("targetInfo.width:", targetInfo.width);
+        console.log("targetInfo.height:", targetInfo.height);
+
+        if (!targetInfo.width || !targetInfo.height) {
+            console.error("Error: targetInfo.width or targetInfo.height is missing or invalid.");
+        }
+    }
+
     if (targetKps && targetInfo && targetInfo.width && targetInfo.height) {
-        // console.log(`  Drawing Target Pose: Frame ${targetFrameIdFromDTW}, Original W/H ${targetInfo.width}/${targetInfo.height}`);
+        console.log(`  Drawing Target Pose: Frame ${targetFrameIdFromDTW}, Original W/H ${targetInfo.width}/${targetInfo.height}`);
         drawPoseOnCanvas(dtwTargetCtx, targetCanvasEl, targetKps, targetInfo.width, targetInfo.height, 'cyan');
     } else {
         console.error(`  Failed to draw Target Pose. Reason(s):`);
